@@ -5,6 +5,8 @@ declare global {
 		interface Platform {
 			env: {
 				DO: DurableObjectNamespace;
+				TURSO_DATABASE_URL: string;
+				TURSO_AUTH_TOKEN: string;
 			};
 			context: {
 				waitUntil(promise: Promise<any>): void;
