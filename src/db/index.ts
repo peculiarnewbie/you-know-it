@@ -8,3 +8,11 @@ export const client = createClient({
 });
 
 export const db = drizzle(client);
+
+export const getDB = (url: string, token: string) => {
+	const localClient = createClient({
+		url: url,
+		authToken: token
+	});
+	return drizzle(localClient);
+};
