@@ -6,7 +6,9 @@
     let webSocket: WebSocket | null
 
     onMount(() => {
-        webSocket = new WebSocket(window.location.origin + "/api" + window.location.pathname)
+        const url = "wss://" + window.location.hostname + "/api" + window.location.pathname
+        console.log(url)
+        webSocket = new WebSocket(url)
         
         webSocket.onmessage = (event) => {
 			const data = JSON.parse(event.data as string);
