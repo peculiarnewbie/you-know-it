@@ -6,7 +6,7 @@
     let webSocket: WebSocket | null
 
     onMount(() => {
-        const url = "wss://" + window.location.hostname + "/api" + window.location.pathname
+        const url = "wss://" + window.location.hostname + "/api" + window.location.pathname + "/websocket"
         console.log(url)
         webSocket = new WebSocket(url)
         
