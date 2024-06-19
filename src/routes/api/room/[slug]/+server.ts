@@ -65,6 +65,7 @@ export async function GET({ platform, request, params }) {
 	return await handleErrors(request, async () => {
 		// We have received an HTTP request! Parse the URL and route the request.
 		const roomName = params.slug as string;
+		console.log('trying', roomName);
 
 		try {
 			return await handleApiRequest(roomName ?? 'hey', request, platform.env);
@@ -78,6 +79,8 @@ export async function GET({ platform, request, params }) {
 async function handleApiRequest(name: string, request: Request, env: App.Platform['env']) {
 	// We've received at API request. Route the request based on the path.
 
+	console.log('creating', name);
+
 	let id;
 	if (name.match(/^[0-9a-f]{64}$/)) {
 		id = env.DO.idFromString(name);
@@ -88,6 +91,8 @@ async function handleApiRequest(name: string, request: Request, env: App.Platfor
 	}
 
 	let roomObject = env.DO.get(id);
+
+	console.log('created', roomObject);
 
 	return await roomObject.fetch(request);
 }
