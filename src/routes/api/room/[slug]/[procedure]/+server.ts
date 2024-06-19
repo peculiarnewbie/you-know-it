@@ -94,5 +94,7 @@ async function handleApiRequest(name: string, request: Request, env: App.Platfor
 
 	console.log('roomObject', JSON.stringify(roomObject), roomObject.id);
 
-	return await roomObject.fetch(request);
+	const res = await roomObject.fetch(request);
+	console.log(JSON.stringify(res));
+	return res;
 }
