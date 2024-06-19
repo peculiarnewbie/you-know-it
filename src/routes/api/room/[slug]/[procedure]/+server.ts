@@ -65,7 +65,7 @@ export async function GET({ platform, request, params }) {
 	return await handleErrors(request, async () => {
 		// We have received an HTTP request! Parse the URL and route the request.
 		const roomName = params.slug as string;
-		console.log('trying', roomName);
+		console.log('trying', roomName, params.procedure);
 
 		try {
 			return await handleApiRequest(roomName ?? 'hey', request, platform.env);
