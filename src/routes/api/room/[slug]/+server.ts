@@ -92,7 +92,7 @@ async function handleApiRequest(name: string, request: Request, env: App.Platfor
 
 	let roomObject = env.DO.get(id);
 
-	console.log('created', roomObject);
+	console.log('roomObject', JSON.stringify(roomObject), roomObject.id);
 
 	return await roomObject.fetch(request);
 }

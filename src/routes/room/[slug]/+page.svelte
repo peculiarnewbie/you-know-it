@@ -35,6 +35,9 @@
 
 			//TODO: after join message update slideTracker.presenter
 		};
+        webSocket.onopen = (event) =>{
+            console.log("connected", webSocket)
+        }
     })
 </script>
 <p>what {data.title}</p>
