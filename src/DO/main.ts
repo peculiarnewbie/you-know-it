@@ -1,75 +1,64 @@
-import {
-	type DurableObjectNamespace,
-	type DurableObjectState,
-	type WebSocket as WS
-} from '@cloudflare/workers-types';
+import { DurableObject } from "cloudflare:workers";
 
-interface CloudflareWebsocket {
-	accept(): unknown;
-	addEventListener(
-		event: 'close',
-		callbackFunction: (code?: number, reason?: string) => unknown
-	): unknown;
-	addEventListener(event: 'error', callbackFunction: (e: unknown) => unknown): unknown;
-	addEventListener(event: 'message', callbackFunction: (event: { data: any }) => unknown): unknown;
-
-	/**
-	 * @param code https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent
-	 * @param reason
-	 */
-	close(code?: number, reason?: string): unknown;
-	send(message: string | Uint8Array): unknown;
+export interface Env {
+  Rooms: DurableObjectNamespace<Rooms>;
 }
 
-class WebSocketPair {
-	0: CloudflareWebsocket;
-	1: CloudflareWebsocket;
-}
-
-interface ResponseInit {
-	status?: number;
-	webSocket?: CloudflareWebsocket;
-}
-
+// Worker
 export default {
-	async fetch(request: Request) {
-		return new Response('Hello World', { status: 200 });
-	}
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    if (request.url.endsWith("/websocket")) {
+      // Expect to receive a WebSocket Upgrade request.
+      // If there is one, accept the request and return a WebSocket Response.
+      const upgradeHeader = request.headers.get('Upgrade');
+      if (!upgradeHeader || upgradeHeader !== 'websocket') {
+        return new Response('Durable Object expected Upgrade: websocket', { status: 426 });
+      }
+
+      // This example will refer to the same Durable Object instance,
+      // since the name "foo" is hardcoded.
+      let id = env.Rooms.idFromName("foo");
+      let stub = env.Rooms.get(id);
+
+      return stub.fetch(request);
+    }
+
+    return new Response(null, {
+      status: 400,
+      statusText: 'Bad Request',
+      headers: {
+        'Content-Type': 'text/plain',
+      },
+    });
+  }
 };
 
 // Durable Object
-export class Rooms {
-	state: DurableObjectState;
+export class Rooms extends DurableObject {
 
-	constructor(state: DurableObjectState) {
-		this.state = state;
-	}
+  async fetch(request: Request): Promise<Response> {
+    // Creates two ends of a WebSocket connection.
+    const webSocketPair = new WebSocketPair();
+    const [client, server] = Object.values(webSocketPair);
 
-	// Handle HTTP requests from clients.
-	async fetch(request: Request): Promise<Response> {
-		const url = new URL(request.url);
-		const path = url.pathname;
-		const procedure = path.split('room/')[1].split('/')[1];
+    // Calling `acceptWebSocket()` informs the runtime that this WebSocket is to begin terminating
+    // request within the Durable Object. It has the effect of "accepting" the connection,
+    // and allowing the WebSocket to send and receive messages.
+    // Unlike `ws.accept()`, `state.acceptWebSocket(ws)` informs the Workers Runtime that the WebSocket
+    // is "hibernatable", so the runtime does not need to pin this Durable Object to memory while
+    // the connection is open. During periods of inactivity, the Durable Object can be evicted
+    // from memory, but the WebSocket connection will remain open. If at some later point the
+    // WebSocket receives a message, the runtime will recreate the Durable Object
+    // (run the `constructor`) and deliver the message to the appropriate handler.
 
-		console.log('fetch in DO', url, procedure);
-		if (procedure == 'websocket') {
-			const upgradeHeader = request.headers.get('Upgrade');
-			if (!upgradeHeader || upgradeHeader !== 'websocket') {
-				return new Response('Durable Object expected Upgrade: websocket', { status: 426 });
-			}
-
-			// Creates two ends of a WebSocket connection.
-			const webSocketPair = new WebSocketPair();
-			const [client, server] = Object.values(webSocketPair);
-
-			const connectionsCount = this.state.getWebSockets().length;
+    const connectionsCount = this.ctx.getWebSockets().length;
 
 			// TODO use auth instead
-			if (connectionsCount === 1) {
-				this.state.acceptWebSocket(server as unknown as WS, ['presenter']);
+			if (connectionsCount <= 1) {
+				this.ctx.acceptWebSocket(server, ['presenter']);
 			} else {
-				this.state.acceptWebSocket(server as unknown as WS);
-				this.state.getWebSockets().forEach((ws) => {
+				this.ctx.acceptWebSocket(server );
+				this.ctx.getWebSockets().forEach((ws) => {
 					ws.send(
 						JSON.stringify({
 							type: 'join',
@@ -79,38 +68,15 @@ export class Rooms {
 				});
 			}
 
-			const response = {
-				status: 101,
-				webSocket: client
-			};
+    return new Response(null, {
+      status: 101,
+      webSocket: client,
+    });
+  }
 
-			return new Response(null, response);
-		} else if (procedure == 'getCurrentConnections') {
-			// Retrieves all currently connected websockets accepted via `acceptWebSocket()`.
-			let numConnections: number = this.state.getWebSockets().length;
-			if (numConnections == 1) {
-				return new Response(
-					`There is ${numConnections} WebSocket client connected to this Durable Object instance.`
-				);
-			}
-			return new Response(
-				`There are ${numConnections} WebSocket clients connected to this Durable Object instance.`
-			);
-		}
-
-		// Unknown path, reply with usage info.
-		return new Response(`
-This Durable Object supports the following endpoints:
-  /websocket
-    - Creates a WebSocket connection. Any messages sent to it are echoed with a prefix.
-  /getCurrentConnections
-    - A regular HTTP GET endpoint that returns the number of currently connected WebSocket clients.
-`);
-	}
-
-	async webSocketMessage(ws: WebSocket, message: ArrayBuffer | string) {
-		if (this.state.getTags(ws as unknown as WS).includes('presenter')) {
-			this.state.getWebSockets().forEach((ws) => {
+  async webSocketMessage(ws: WebSocket, message: ArrayBuffer | string) {
+		if (this.ctx.getTags(ws).includes('presenter')) {
+			this.ctx.getWebSockets().forEach((ws) => {
 				ws.send(message);
 			});
 		}
@@ -120,4 +86,15 @@ This Durable Object supports the following endpoints:
 		// If the client closes the connection, the runtime will invoke the webSocketClose() handler.
 		ws.close(code, 'Durable Object is closing WebSocket');
 	}
+
+  // async webSocketMessage(ws: WebSocket, message: ArrayBuffer | string) {
+  //   // Upon receiving a message from the client, the server replies with the same message,
+  //   // and the total number of connections with the "[Durable Object]: " prefix
+  //   ws.send(`[Durable Object] message: ${message}, connections: ${this.ctx.getWebSockets().length}`);
+  // }
+
+  // async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean) {
+  //   // If the client closes the connection, the runtime will invoke the webSocketClose() handler.
+  //   ws.close(code, "Durable Object is closing WebSocket");
+  // }
 }
