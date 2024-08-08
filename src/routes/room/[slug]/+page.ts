@@ -1,6 +1,8 @@
+import { game1 } from '$lib/sampleqs.js';
+
 export function load({ params }) {
 	return {
 		title: params.slug,
-		content: 'Welcome to our blog. Lorem ipsum dolor sit amet...'
+		game: game1
 	};
 }

@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import type { PageData } from './$types';
 
-    export let data;
+    let {data}: {data:PageData} = $props();
 
     let webSocket: WebSocket | null
 
@@ -41,3 +42,7 @@
     })
 </script>
 <p>what {data.title}</p>
+{#each data.game.players as player }
+<p>{player.position}. {player.displayName}</p>	
+{/each}
+<p>{JSON.stringify(data.game)}</p>
